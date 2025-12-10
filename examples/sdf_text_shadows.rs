@@ -2,6 +2,7 @@ use bevy::{
     light::{DirectionalLightShadowMap, OnlyShadowCaster},
     prelude::*,
 };
+use bevy_camera::visibility::RenderLayers;
 use bevy_text3d::{
     Font, Glyph, GlyphProfileRenderMode, GlyphTessellationQuality, ShadowOnlyMaterial,
     ShadowOnlyMeshBundle, Text3d, Text3dConfig, Text3dPlugin, TextMeshPluginConfig,
@@ -9,6 +10,10 @@ use bevy_text3d::{
 };
 
 use bevy_light::light_consts::lux;
+
+// Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
+const DEFAULT_RENDER_LAYER: usize = 0;
+const SHADOW_ONLY_LAYER: usize = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ShadowQuality {
@@ -131,6 +136,10 @@ fn main() {
         )
         .add_systems(
             Update,
+            debug_log_shadow_casters.run_if(in_state(AppState::Ready)),
+        )
+        .add_systems(
+            Update,
             handle_quality_input.run_if(in_state(AppState::Ready)),
         )
         .add_systems(
@@ -162,26 +171,45 @@ fn setup(
     #[cfg(debug_assertions)]
     debug!("Font load state: {:?}", load_state);
 
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(0.0, 2.0, 5.0).looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
-    ));
+    let camera = commands
+        .spawn((
+            Camera3d::default(),
+            Transform::from_xyz(0.0, 2.0, 5.0).looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
+        ))
+        .id();
+    // For debugging, let the camera see both the default and the shadow-only layer
+    commands.entity(camera).insert(RenderLayers::from_layers(&[
+        DEFAULT_RENDER_LAYER,
+        SHADOW_ONLY_LAYER,
+    ]));
 
-    commands.spawn((
-        DirectionalLight {
-            illuminance: lux::FULL_DAYLIGHT,
-            shadows_enabled: true,
-            ..Default::default()
-        },
-        // WORKAROUND: Light only sees default layer due to Bevy cross-layer shadow casting limitation
-        // RenderLayers::from_layers(&[DEFAULT_RENDER_LAYER, SHADOW_ONLY_LAYER]),
-        Transform::from_translation(Vec3::new(-0.5, 3.0, 0.0)).with_rotation(Quat::from_euler(
-            EulerRot::XYZ,
-            -0.5,
-            -0.5,
-            0.0,
-        )),
-    ));
+    const DEFAULT_RENDER_LAYER: usize = 0;
+    const SHADOW_ONLY_LAYER: usize = 1;
+
+    let dir_light_entity =
+        commands
+            .spawn((
+                DirectionalLight {
+                    illuminance: lux::FULL_DAYLIGHT,
+                    shadows_enabled: true,
+                    ..Default::default()
+                },
+                Transform::from_translation(Vec3::new(-0.5, 3.0, 0.0))
+                    .with_rotation(Quat::from_euler(EulerRot::XYZ, -0.5, -0.5, 0.0)),
+            ))
+            .id();
+    // Allow this directional light to participate in layers 0 (default camera) and 1 (shadow-only)
+    commands
+        .entity(dir_light_entity)
+        .insert(RenderLayers::from_layers(&[
+            DEFAULT_RENDER_LAYER,
+            SHADOW_ONLY_LAYER,
+        ]));
+    info!(
+        "Directional light {:?} assigned layers {:?}",
+        dir_light_entity,
+        RenderLayers::from_layers(&[DEFAULT_RENDER_LAYER, SHADOW_ONLY_LAYER])
+    );
 
     // Floor to receive shadows
     let floor_handle = meshes.add(Plane3d::default().mesh().size(20.0, 20.0));
@@ -207,6 +235,41 @@ fn setup(
             Transform::from_xyz(1.0, 0.25, -1.0),
         ));
     }
+
+    // Debug-only: spawn a small, visible cube on the shadow-only layer so we can
+    // verify that shadow-only geometry on layer 1 participates in directional light shadow maps.
+    // This cube is visible (not OnlyShadowCaster) and on layer 1, so it should be rendered by camera
+    // only if RenderLayers were also assigned to the camera (which we don't do). However since
+    // it's visible it helps localize layering issues. We also spawn a smaller OnlyShadowCaster cube on layer 1
+    // which should cast shadows even though it's invisible to the camera.
+    let debug_cube_handle = meshes.add(Cuboid::new(0.2, 0.2, 0.2));
+    let debug_visible_material = materials.add(Color::srgb(0.2, 0.8, 0.2));
+    // Visible cube in layer 1 (for visual debugging if camera layer includes 1)
+    let visible_debug = commands
+        .spawn((
+            Mesh3d(debug_cube_handle.clone()),
+            MeshMaterial3d(debug_visible_material.clone()),
+            Transform::from_xyz(0.5, 0.25, 0.0),
+        ))
+        .id();
+    commands
+        .entity(visible_debug)
+        .insert(RenderLayers::layer(SHADOW_ONLY_LAYER));
+
+    // Invisible shadow-only cube that should cast shadows onto the floor (uses StandardMaterial + Visibility::Hidden)
+    // We set `OnlyShadowCaster` so it is considered for shadow maps even though hidden from cameras.
+    let debug_shadow_material = materials.add(StandardMaterial::default());
+    let shadow_debug = commands
+        .spawn((
+            Mesh3d(debug_cube_handle.clone()),
+            MeshMaterial3d(debug_shadow_material.clone()),
+            Transform::from_xyz(0.0, 0.25, 0.0),
+        ))
+        .insert((OnlyShadowCaster, Visibility::Hidden))
+        .id();
+    commands
+        .entity(shadow_debug)
+        .insert(RenderLayers::layer(SHADOW_ONLY_LAYER));
 }
 
 // One entity handles the entire text
@@ -329,6 +392,13 @@ fn sync_shadow_casters(
                 )
                 .insert((OnlyShadowCaster, Visibility::Hidden))
                 .id();
+            commands
+                .entity(child)
+                .insert(RenderLayers::layer(SHADOW_ONLY_LAYER));
+            info!(
+                "Created shadow-only child {:?} for Text3d entity {:?} on RenderLayer {}",
+                child, entity, SHADOW_ONLY_LAYER
+            );
             commands.entity(entity).add_child(child);
 
             info!(
@@ -336,6 +406,23 @@ fn sync_shadow_casters(
                 child, entity
             );
         }
+    }
+}
+
+/// Debug system used to log positions and AABB information for shadow-only meshes and the floor.
+fn debug_log_shadow_casters(
+    query_shadow_casters: Query<(&Mesh3d, &GlobalTransform, &RenderLayers), With<OnlyShadowCaster>>,
+    floor_query: Query<(&Mesh3d, &GlobalTransform), Without<MeshMaterial3d<ShadowOnlyMaterial>>>,
+) {
+    for (mesh, transform, layers) in query_shadow_casters.iter() {
+        debug!(
+            "shadow-caster entity on layers {:?} world pos = {:?}",
+            layers,
+            transform.translation()
+        );
+    }
+    for (mesh, transform) in floor_query.iter() {
+        debug!("floor world pos = {:?}", transform.translation());
     }
 }
 
