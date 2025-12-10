@@ -1,9 +1,15 @@
-use bevy::light::{DirectionalLightShadowMap, NotShadowCaster};
+use bevy::light::{DirectionalLightShadowMap, NotShadowCaster, OnlyShadowCaster};
 use bevy::prelude::*;
+use bevy_camera::visibility::RenderLayers;
 use bevy_text3d::{
-    Font, Glyph, GlyphProfileRenderMode, ShadowOnlyMaterial, ShadowOnlyMeshBundle, Text3d,
-    Text3dPlugin, create_shadow_only_material,
+    Font, Glyph, GlyphProfileRenderMode, GlyphTessellationQuality, ShadowOnlyMaterial,
+    ShadowOnlyMeshBundle, Text3d, Text3dConfig, Text3dPlugin, TextMeshPluginConfig,
+    create_shadow_only_material,
 };
+
+// Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
+const DEFAULT_RENDER_LAYER: usize = 0;
+const SHADOW_ONLY_LAYER: usize = 1;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 enum AppState {
@@ -19,7 +25,14 @@ fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
         .add_plugins(Text3dPlugin)
-        .insert_resource(DirectionalLightShadowMap { size: 2048 })
+        .insert_resource(DirectionalLightShadowMap { size: 4096 })
+        // Configure glyph tessellation quality for a reasonably smooth shadow silhouette
+        .insert_resource(Text3dConfig {
+            text_mesh_config: TextMeshPluginConfig {
+                text_mesh_shadow_quality: GlyphTessellationQuality::High,
+                font_scale: Vec3::ONE,
+            },
+        })
         .init_state::<AppState>()
         .add_systems(Startup, setup)
         .add_systems(
@@ -46,20 +59,36 @@ fn setup(
     commands.insert_resource(FontHandle(font_handle));
 
     // Camera
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(0.0, 2.5, 6.0).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
-    ));
+    let camera = commands
+        .spawn((
+            Camera3d::default(),
+            Transform::from_xyz(0.0, 2.5, 6.0).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
+        ))
+        .id();
+    // Allow the camera to optionally see both the default and shadow-only layer for debugging.
+    commands.entity(camera).insert(RenderLayers::from_layers(&[
+        DEFAULT_RENDER_LAYER,
+        SHADOW_ONLY_LAYER,
+    ]));
 
-    // Directional light with shadows
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 10000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, -0.5, 0.0)),
-    ));
+    // Directional light with shadows and configured to affect both layer 0 (camera) and layer 1 (shadow-only)
+    let dir_light_entity = commands
+        .spawn((
+            DirectionalLight {
+                illuminance: 10000.0,
+                shadows_enabled: true,
+                ..default()
+            },
+            Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.7, -0.5, 0.0)),
+        ))
+        .id();
+    // Allow this directional light to participate in layers 0 (default camera) and 1 (shadow-only)
+    commands
+        .entity(dir_light_entity)
+        .insert(RenderLayers::from_layers(&[
+            DEFAULT_RENDER_LAYER,
+            SHADOW_ONLY_LAYER,
+        ]));
 
     // Floor plane to receive shadows
     commands.spawn((
@@ -68,6 +97,8 @@ fn setup(
             base_color: Color::srgb(0.8, 0.8, 0.8),
             ..default()
         })),
+        // Ensure floor is in the default render layer
+        RenderLayers::layer(DEFAULT_RENDER_LAYER),
     ));
 
     // Reference cube to show shadow direction
@@ -78,7 +109,39 @@ fn setup(
             ..default()
         })),
         Transform::from_xyz(-2.0, 0.25, 0.0),
+        RenderLayers::layer(DEFAULT_RENDER_LAYER),
     ));
+
+    // Debug: Spawn a visible cube and an invisible OnlyShadowCaster cube on the shadow-only layer
+    let debug_cube_handle = meshes.add(Cuboid::new(0.2, 0.2, 0.2));
+    let visible_debug_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.2, 0.8, 0.2),
+        ..default()
+    });
+    let visible_debug = commands
+        .spawn((
+            Mesh3d(debug_cube_handle.clone()),
+            MeshMaterial3d(visible_debug_material.clone()),
+            Transform::from_xyz(0.5, 0.25, 0.0),
+        ))
+        .id();
+    commands
+        .entity(visible_debug)
+        .insert(RenderLayers::layer(SHADOW_ONLY_LAYER));
+
+    // Invisible shadow-only cube
+    let shadow_debug_material = materials.add(StandardMaterial::default());
+    let shadow_debug = commands
+        .spawn((
+            Mesh3d(debug_cube_handle.clone()),
+            MeshMaterial3d(shadow_debug_material.clone()),
+            Transform::from_xyz(0.0, 0.25, 0.0),
+        ))
+        .insert((OnlyShadowCaster, Visibility::Hidden))
+        .id();
+    commands
+        .entity(shadow_debug)
+        .insert(RenderLayers::layer(SHADOW_ONLY_LAYER));
 }
 
 fn check_font_loaded(
@@ -167,7 +230,10 @@ fn sync_shadow_casters(
                     ShadowOnlyMeshBundle::new(profile_mesh.clone(), material)
                         .with_transform(Transform::from_xyz(0.0, 0.0, -0.001)),
                 )
+                .insert((OnlyShadowCaster, Visibility::Hidden))
                 .id();
+            // Put shadow-only child on layer 1 so the light can include it in shadow mapping without camera seeing it.
+            commands.entity(child).insert(RenderLayers::layer(1));
 
             commands.entity(entity).add_child(child);
             info!("Shadow caster child spawned for Text3d entity");
