@@ -1,0 +1,93 @@
+[package]
+name = "bevy_text3d"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.17.3", default-features = false, features = [
+  "std",
+  "async_executor",
+  "android-game-activity",
+  "android_shared_stdcxx",
+  "animation",
+  "bevy_asset",
+  "bevy_audio",
+  "bevy_color",
+  "bevy_core_pipeline",
+  "bevy_gilrs",
+  "bevy_gizmos",
+  "bevy_gltf",
+  "bevy_input_focus",
+  "bevy_log",
+  "bevy_light",
+  "bevy_mesh_picking_backend",
+  "bevy_pbr",
+  "bevy_picking",
+  "bevy_render",
+  "bevy_scene",
+  "bevy_sprite",
+  "bevy_sprite_picking_backend",
+  "bevy_state",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_ui_picking_backend",
+  "bevy_window",
+  "bevy_winit",
+  "custom_cursor",
+  "default_font",
+  "hdr",
+  "multi_threaded",
+  "png",
+  "smaa_luts",
+  "sysinfo_plugin",
+  "tonemapping_luts",
+  "vorbis",
+  "webgl2",
+  #"x11", 
+#bevy default features above (I've disabled "x11" since I want to target wayland only)
+  "wayland",
+  "zstd_rust",
+] }
+
+bevy_mesh = "0.17.3"
+fdsm = "0.7.0"
+owned_ttf_parser = "0.25.0"
+nalgebra = "0.33.2"
+bevy_light = { path = "crates/patched_bevy/bevy_light" }
+bevy_pbr = { path = "crates/patched_bevy/bevy_pbr" }
+
+image = "0.25.1"
+thiserror = "1.0.61"
+bevy_log = "0.17.3"
+color-eyre = "0.6.5"
+lyon = "1.0.16"
+bevy_ui = "0.17.3"
+bevy_text = "0.17.3"
+# open_space_controller dependency removed for standalone repo
+bevy_asset_loader = "0.24.0-rc.1"
+bevy_camera = "0.17.3"
+
+[features]
+default = []
+
+[patch.crates-io]
+bevy_pbr = { path = "crates/patched_bevy/bevy_pbr" }
+bevy_light = { path = "crates/patched_bevy/bevy_light" }
+
+[[example]]
+name = "basic"
+
+[[example]]
+name = "custom_color"
+
+[[example]]
+name = "from_rect"
+
+[[example]]
+name = "rotating_labels"
+
+[[example]]
+name = "sdf_text_shadows"
+
+[[example]]
+name = "simple_text_shadows"

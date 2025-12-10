@@ -1,0 +1,38 @@
+[package]
+name = "bevy_light"
+version = "0.17.3"
+edition = "2024"
+description = "Keeps the lights on at Bevy Engine"
+homepage = "https://bevy.org"
+repository = "https://github.com/bevyengine/bevy"
+license = "MIT OR Apache-2.0"
+keywords = ["bevy"]
+
+[dependencies]
+# bevy
+bevy_app = { version = "0.17.3" }
+bevy_asset = { version = "0.17.3" }
+bevy_image = { version = "0.17.3" }
+bevy_mesh = { version = "0.17.3" }
+bevy_math = { version = "0.17.3" }
+bevy_reflect = { version = "0.17.3" }
+bevy_camera = { version = "0.17.3" }
+bevy_ecs = { version = "0.17.3" }
+bevy_transform = { version = "0.17.3" }
+bevy_utils = { version = "0.17.3" }
+bevy_platform = { version = "0.17.3" }
+bevy_color = { version = "0.17.3", features = [
+  "serialize",
+] }
+
+# other
+tracing = { version = "0.1", default-features = false }
+
+[features]
+default = []
+experimental_pbr_pcss = []
+webgl = []
+webgpu = []
+[package.metadata.docs.rs]
+rustdoc-args = ["-Zunstable-options", "--generate-link-to-definition"]
+all-features = true
