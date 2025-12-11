@@ -10,6 +10,6 @@ The crate exposes a Bevy plugin for rendering 3D text using Signed Distance Fiel
 cargo run --example basic
 ```
 
-Note: Examples have been modified to not require `open_space_controller`. They use basic Bevy cameras and UI for demonstration.
+Note: Examples have been modified to not require `open_space_controller`. They use basic Bevy cameras for demonstration.
 
-See the examples folder for more demos.
+See the examples folder for more details.
