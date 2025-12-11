@@ -209,7 +209,6 @@ pub type WithLight = Or<(With<PointLight>, With<SpotLight>, With<DirectionalLigh
 #[derive(Debug, Component, Reflect, Default, Clone, PartialEq)]
 #[reflect(Component, Default, Debug, Clone, PartialEq)]
 pub struct NotShadowCaster;
-
 /// Add this component to make a [`Mesh3d`] not receive shadows.
 ///
 /// **Note:** If you're using diffuse transmission, setting [`NotShadowReceiver`] will
@@ -388,9 +387,7 @@ pub fn check_dir_light_mesh_visibility(
                     has_no_frustum_culling,
                     has_only_shadow_caster,
                 )| {
-                    let visible = (inherited_visibility.get() && !has_visibility_range)
-                        || has_only_shadow_caster;
-                    if !visible {
+                    if !inherited_visibility.get() && !has_only_shadow_caster {
                         return;
                     }
 
@@ -569,9 +566,7 @@ pub fn check_point_light_mesh_visibility(
                         has_no_frustum_culling,
                         has_only_shadow_caster,
                     )| {
-                        let visible = (inherited_visibility.get() && !has_visibility_range)
-                            || has_only_shadow_caster;
-                        if !visible {
+                        if !inherited_visibility.get() && !has_only_shadow_caster {
                             return;
                         }
                         let entity_mask = maybe_entity_mask.unwrap_or_default();
@@ -671,9 +666,7 @@ pub fn check_point_light_mesh_visibility(
                         has_no_frustum_culling,
                         has_only_shadow_caster,
                     )| {
-                        let visible = (inherited_visibility.get() && !has_visibility_range)
-                            || has_only_shadow_caster;
-                        if !visible {
+                        if !inherited_visibility.get() && !has_only_shadow_caster {
                             return;
                         }
 

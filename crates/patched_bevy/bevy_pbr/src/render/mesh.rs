@@ -1326,7 +1326,7 @@ pub fn extract_meshes_for_cpu_building(
             Has<NotShadowCaster>,
             Has<NoAutomaticBatching>,
             Has<OnlyShadowCaster>,
-            Option<&VisibilityRange>,
+            Has<VisibilityRange>,
             Option<&RenderLayers>,
         )>,
     >,
@@ -1354,11 +1354,10 @@ pub fn extract_meshes_for_cpu_building(
                 return;
             }
 
-            let lod_index = if visibility_range.is_some() {
-                render_visibility_ranges.lod_index_for_entity(entity.into())
-            } else {
-                None
-            };
+            let mut lod_index = None;
+            if visibility_range {
+                lod_index = render_visibility_ranges.lod_index_for_entity(entity.into());
+            }
 
             let mesh_flags = MeshFlags::from_components(
                 transform,
@@ -1421,25 +1420,26 @@ pub fn extract_meshes_for_cpu_building(
 }
 
 /// All the data that we need from a mesh in the main world.
-#[derive(QueryData)]
-pub struct GpuMeshExtractionData {
-    pub entity: Entity,
-    pub view_visibility: Read<ViewVisibility>,
-    pub transform: Read<GlobalTransform>,
-    pub previous_transform: Option<Read<PreviousGlobalTransform>>,
-    pub lightmap: Option<Read<Lightmap>>,
-    pub aabb: Option<Read<Aabb>>,
-    pub mesh: Read<Mesh3d>,
-    pub tag: Option<Read<MeshTag>>,
-    pub no_frustum_culling: Has<NoFrustumCulling>,
-    pub not_shadow_receiver: Has<NotShadowReceiver>,
-    pub transmitted_receiver: Has<TransmittedShadowReceiver>,
-    pub not_shadow_caster: Has<NotShadowCaster>,
-    pub no_automatic_batching: Has<NoAutomaticBatching>,
-    pub has_only_shadow_caster: Has<OnlyShadowCaster>,
-    pub visibility_range: Option<Read<VisibilityRange>>,
-    pub render_layers: Option<Read<RenderLayers>>,
-}
+type GpuMeshExtractionQuery = (
+    Entity,
+    Read<ViewVisibility>,
+    Read<GlobalTransform>,
+    Option<Read<PreviousGlobalTransform>>,
+    Option<Read<Lightmap>>,
+    Option<Read<Aabb>>,
+    Read<Mesh3d>,
+    Option<Read<MeshTag>>,
+    ( // Work around limit of 16 items/tuple in Bevy queries.
+        Has<NoFrustumCulling>,
+        Has<NotShadowReceiver>,
+        Has<TransmittedShadowReceiver>,
+        Has<NotShadowCaster>,
+        Has<NoAutomaticBatching>,
+        Has<OnlyShadowCaster>,
+        Has<VisibilityRange>,
+    ),
+    Option<Read<RenderLayers>>,
+);
 
 /// Extracts meshes from the main world into the render world and queues
 /// [`MeshInputUniform`]s to be uploaded to the GPU.
@@ -1455,7 +1455,7 @@ pub fn extract_meshes_for_gpu_building(
     mut render_mesh_instance_queues: ResMut<RenderMeshInstanceGpuQueues>,
     changed_meshes_query: Extract<
         Query<
-            GpuMeshExtractionData,
+            GpuMeshExtractionQuery,
             Or<(
                 Changed<ViewVisibility>,
                 Changed<GlobalTransform>,
@@ -1469,12 +1469,13 @@ pub fn extract_meshes_for_gpu_building(
                 Changed<TransmittedShadowReceiver>,
                 Changed<NotShadowCaster>,
                 Changed<NoAutomaticBatching>,
+                Changed<OnlyShadowCaster>,
                 Changed<VisibilityRange>,
                 Changed<SkinnedMesh>,
             )>,
         >,
     >,
-    all_meshes_query: Extract<Query<GpuMeshExtractionData>>,
+    all_meshes_query: Extract<Query<GpuMeshExtractionQuery>>,
     mut removed_meshes_query: Extract<RemovedComponents<Mesh3d>>,
     gpu_culling_query: Extract<Query<(), (With<Camera>, Without<NoIndirectDrawing>)>>,
     meshes_to_reextract_next_frame: ResMut<MeshesToReextractNextFrame>,
@@ -1544,38 +1545,40 @@ pub fn extract_meshes_for_gpu_building(
 }
 
 fn extract_mesh_for_gpu_building(
-    item: <GpuMeshExtractionData as QueryData>::Item<'_, '_>,
+    (
+        entity,
+        view_visibility,
+        transform,
+        previous_transform,
+        lightmap,
+        aabb,
+        mesh,
+        tag,
+        ( // Work around limit of 16 items/tuple in Bevy queries.
+            no_frustum_culling,
+            not_shadow_receiver,
+            transmitted_receiver,
+            not_shadow_caster,
+            no_automatic_batching,
+            has_only_shadow_caster,
+            visibility_range,
+        ),
+        render_layers,
+    ): <GpuMeshExtractionQuery as QueryData>::Item<'_, '_>,
     render_visibility_ranges: &RenderVisibilityRanges,
     render_mesh_instances: &RenderMeshInstancesGpu,
     queue: &mut RenderMeshInstanceGpuQueue,
     any_gpu_culling: bool,
 ) {
-    let entity = item.entity;
-    let view_visibility = item.view_visibility;
-    let transform = item.transform;
-    let previous_transform = item.previous_transform;
-    let lightmap = item.lightmap;
-    let aabb = item.aabb;
-    let mesh = item.mesh;
-    let tag = item.tag;
-    let no_frustum_culling = item.no_frustum_culling;
-    let not_shadow_receiver = item.not_shadow_receiver;
-    let transmitted_receiver = item.transmitted_receiver;
-    let not_shadow_caster = item.not_shadow_caster;
-    let no_automatic_batching = item.no_automatic_batching;
-    let has_only_shadow_caster = item.has_only_shadow_caster;
-    let visibility_range = item.visibility_range;
-    let render_layers = item.render_layers;
     if !view_visibility.get() && !has_only_shadow_caster {
         queue.remove(entity.into(), any_gpu_culling);
         return;
     }
 
-    let lod_index = if visibility_range.is_some() {
-        render_visibility_ranges.lod_index_for_entity(entity.into())
-    } else {
-        None
-    };
+    let mut lod_index = None;
+    if visibility_range {
+        lod_index = render_visibility_ranges.lod_index_for_entity(entity.into());
+    }
 
     let mesh_flags = MeshFlags::from_components(
         transform,
