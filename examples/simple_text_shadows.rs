@@ -2,9 +2,8 @@ use bevy::light::{DirectionalLightShadowMap, NotShadowCaster, OnlyShadowCaster};
 use bevy::prelude::*;
 use bevy_camera::visibility::RenderLayers;
 use bevy_text3d::{
-    Font, Glyph, GlyphProfileRenderMode, GlyphTessellationQuality, ShadowOnlyMaterial,
-    ShadowOnlyMeshBundle, Text3d, Text3dConfig, Text3dPlugin, TextMeshPluginConfig,
-    create_shadow_only_material,
+    Font, Glyph, GlyphProfileRenderMode, GlyphTessellationQuality, ShadowOnlyMaterial, Text3d,
+    Text3dConfig, Text3dPlugin, TextMeshPluginConfig, create_shadow_only_material,
 };
 
 // Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
@@ -224,12 +223,13 @@ fn sync_shadow_casters(
             let material =
                 shadow_materials.add(create_shadow_only_material(StandardMaterial::default()));
 
-            // Spawn invisible glyph_mesh child that casts shadows
+            // Spawn an invisible child that casts shadows using Mesh3d + MeshMaterial3d
             let child = commands
-                .spawn(
-                    ShadowOnlyMeshBundle::new(profile_mesh.clone(), material)
-                        .with_transform(Transform::from_xyz(0.0, 0.0, -0.001)),
-                )
+                .spawn((
+                    Mesh3d(profile_mesh.clone()),
+                    MeshMaterial3d(material.clone()),
+                    Transform::from_xyz(0.0, 0.0, -0.001),
+                ))
                 .insert((OnlyShadowCaster, Visibility::Hidden))
                 .id();
             // Put shadow-only child on layer 1 so the light can include it in shadow mapping without camera seeing it.

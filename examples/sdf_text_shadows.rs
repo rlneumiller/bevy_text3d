@@ -4,9 +4,8 @@ use bevy::{
 };
 use bevy_camera::visibility::RenderLayers;
 use bevy_text3d::{
-    Font, Glyph, GlyphProfileRenderMode, GlyphTessellationQuality, ShadowOnlyMaterial,
-    ShadowOnlyMeshBundle, Text3d, Text3dConfig, Text3dPlugin, TextMeshPluginConfig,
-    create_shadow_only_material,
+    Font, Glyph, GlyphProfileRenderMode, GlyphTessellationQuality, ShadowOnlyMaterial, Text3d,
+    Text3dConfig, Text3dPlugin, TextMeshPluginConfig, create_shadow_only_material,
 };
 
 use bevy_light::light_consts::lux;
@@ -386,10 +385,11 @@ fn sync_shadow_casters(
 
             // Spawn invisible glyph mesh child that casts shadows using the shadow-only material.
             let child = commands
-                .spawn(
-                    ShadowOnlyMeshBundle::new(profile_mesh.clone(), material_handle)
-                        .with_transform(Transform::from_xyz(0.0, 0.0, -0.001)),
-                )
+                .spawn((
+                    Mesh3d(profile_mesh.clone()),
+                    MeshMaterial3d(material_handle),
+                    Transform::from_xyz(0.0, 0.0, -0.001),
+                ))
                 .insert((OnlyShadowCaster, Visibility::Hidden))
                 .id();
             commands
