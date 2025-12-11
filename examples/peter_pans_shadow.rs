@@ -4,6 +4,10 @@ use bevy::prelude::*;
 use bevy::gltf::GltfAssetLabel;
 use bevy::scene::{SceneRoot, SceneInstanceReady};
 use bevy_camera::visibility::RenderLayers;
+use bevy::camera::primitives::Aabb;
+// The `Gltf` asset type is re-exported by the engine prelude when the `gltf` feature is enabled
+use bevy::gltf::Gltf;
+use bevy::animation::AnimationClip;
 
 // Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
 const DEFAULT_RENDER_LAYER: usize = 0;
@@ -17,9 +21,13 @@ const SHADOW_ONLY_LAYER: usize = 1;
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins)
+        .insert_resource(PeterPanGrounding { offset_y: None })
+        .init_resource::<PeterPanEntities>()
+        .init_resource::<AnimationOverrideState>()
         .insert_resource(DirectionalLightShadowMap { size: 4096 })
         .add_systems(Startup, setup)
         .add_systems(Update, move_peter_pan)
+        .add_systems(Update, try_apply_named_animations)
         
         .run();
 }
@@ -54,7 +62,6 @@ fn setup(
         SHADOW_ONLY_LAYER,
     ]));
 
-    // Directional light with shadows
     let dir_light = commands
         .spawn((
             DirectionalLight {
@@ -90,34 +97,54 @@ fn setup(
     // Use the Fox model included in bevy_0.17 known-good example assets
     let gltf_path: &str = "models/animated/Fox.glb";
     let glb_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset(gltf_path));
-    let glb_animation = asset_server.load(GltfAssetLabel::Animation(0).from_asset(gltf_path));
+    // Also load the main Gltf to discover named animations if present
+    let gltf_asset = asset_server.load(gltf_path);
+    // We'll load both the survey and run animations by index. If your model
+    // provides named animations, replace these indices with the correct ones
+    // or use the `Gltf` asset and discover names at runtime.
+    let glb_survey_anim = asset_server.load(GltfAssetLabel::Animation(0).from_asset(gltf_path));
+    let glb_run_anim = asset_server.load(GltfAssetLabel::Animation(2).from_asset(gltf_path));
     let glb_scene_scale = 0.025;
 
     // 1. The Visible Body (No Shadow)
     // Create AnimationGraph from the animation clip and store the graph handle
-    let (graph, index): (AnimationGraph, AnimationNodeIndex) =
-        AnimationGraph::from_clip(glb_animation.clone());
-    let graph_handle = graphs.add(graph);
+    let (survey_graph, survey_index): (AnimationGraph, AnimationNodeIndex) =
+        AnimationGraph::from_clip(glb_survey_anim.clone());
+    let survey_graph_handle = graphs.add(survey_graph);
+    let survey_animation = AnimationToPlay { graph_handle: survey_graph_handle.clone(), index: survey_index };
 
-    let animation_component = AnimationToPlay { graph_handle: graph_handle.clone(), index };
-
-    commands.spawn((
+    let body_entity = commands.spawn((
         SceneRoot(glb_scene.clone()),
-        Transform::from_xyz(0.0, 1.0, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
+        Transform::from_xyz(0.0, 0.1217422, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
         PeterPanBody,
+        survey_animation,
         // NotShadowCaster will be applied to descendant mesh entities in a SceneInstanceReady handler
         RenderLayers::layer(DEFAULT_RENDER_LAYER),
-    )).observe(play_peter_pan_when_ready);
+    )).observe(play_peter_pan_when_ready).id();
 
     // 2. The Independent Shadow (Invisible, Shadow Only)
-    commands.spawn((
+    // Create AnimationGraph for 'run' and attach to the shadow entity
+    let (run_graph, run_index): (AnimationGraph, AnimationNodeIndex) =
+        AnimationGraph::from_clip(glb_run_anim.clone());
+    let run_graph_handle = graphs.add(run_graph);
+    let run_animation = AnimationToPlay { graph_handle: run_graph_handle.clone(), index: run_index };
+
+    let shadow_entity = commands.spawn((
         SceneRoot(glb_scene.clone()),
-        Transform::from_xyz(0.0, 1.0, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
+        Transform::from_xyz(0.0, 0.1217422, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
         PeterPanShadow,
         // We'll apply OnlyShadowCaster + Hidden to descendants when the scene is ready
         RenderLayers::layer(SHADOW_ONLY_LAYER),
-        animation_component,
-    )).observe(play_peter_pan_when_ready);
+        run_animation,
+    )).observe(play_peter_pan_when_ready).id();
+
+    // Store the entity ids so that we can patch them later if we discover named
+    // animations from the loaded `Gltf` asset.
+    commands.insert_resource(PeterPanEntities {
+        body: Some(body_entity),
+        shadow: Some(shadow_entity),
+        gltf_handle: gltf_asset,
+    });
 
     // Nothing else needed here; the AnimationToPlay component will be used when the scene instance is ready
 
@@ -145,9 +172,49 @@ fn play_peter_pan_when_ready(
     mut players: Query<&mut AnimationPlayer>,
     body_query: Query<&PeterPanBody>,
     shadow_query: Query<&PeterPanShadow>,
+    mut transforms: Query<&mut Transform>,
+    global_aabb_query: Query<(&GlobalTransform, &Aabb)>,
+    mut grounding: ResMut<PeterPanGrounding>,
     ) {
-    // Optionally get the AnimationToPlay; it's not required for apply the shadow components
+    // Optionally get the AnimationToPlay; it's not required to apply the shadow components
     let anim = animation_query.get(scene_ready.entity).ok();
+    // If this is the visible body root, compute the minimum Y of all descendant AABBs
+    if body_query.get(scene_ready.entity).is_ok() {
+        let mut min_world_y: f32 = f32::INFINITY;
+        for child in children.iter_descendants(scene_ready.entity) {
+            if let Ok((global, aabb)) = global_aabb_query.get(child) {
+                let center: Vec3 = Vec3::from(aabb.center);
+                let half: Vec3 = Vec3::from(aabb.half_extents);
+                for &sx in &[ -1.0f32, 1.0f32 ] {
+                    for &sy in &[ -1.0f32, 1.0f32 ] {
+                        for &sz in &[ -1.0f32, 1.0f32 ] {
+                            let local_corner = center + Vec3::new(sx * half.x, sy * half.y, sz * half.z);
+                            let world_corner = global.transform_point(local_corner);
+                            min_world_y = min_world_y.min(world_corner.y);
+                        }
+                    }
+                }
+            }
+        }
+
+        if min_world_y < f32::INFINITY {
+            // Ground plane is at y = 0.0. We'll lower the body so the minimum point sits on the ground
+            let offset = 0.0 - min_world_y;
+            if let Ok(mut t) = transforms.get_mut(scene_ready.entity) {
+                t.translation.y += offset;
+                info!("Peter Pan body root translation after offset: {}", t.translation.y);
+            } else {
+                // Fallback in case the transform was not present for some reason
+                commands.entity(scene_ready.entity).insert(Transform::from_translation(Vec3::new(0.0, offset, 0.0)));
+            }
+            info!("Peter Pan body min_y: {} offset: {}", min_world_y, offset);
+            info!("Peter Pan body min_y: {} offset: {}", min_world_y, offset);
+            grounding.offset_y = Some(offset);
+            let expected_min_after = min_world_y + offset;
+            info!("Peter Pan body new min_y (expected after applying offset): {}", expected_min_after);
+        }
+    }
+
     for child in children.iter_descendants(scene_ready.entity) {
         // Start animations on any AnimationPlayer only if AnimationToPlay exists
         if let Some(animation_to_play) = anim {
@@ -171,12 +238,27 @@ fn play_peter_pan_when_ready(
             commands.entity(child).insert((OnlyShadowCaster, Visibility::Hidden, RenderLayers::layer(SHADOW_ONLY_LAYER)));
         }
     }
+
+    // If this is the shadow root and we already computed a body offset, apply the same offset
+    if shadow_query.get(scene_ready.entity).is_ok() {
+        if let Some(offset) = grounding.offset_y {
+            // Apply the same offset so the visible body and the shadow instance sit at the same baseline.
+            // Add a tiny additional offset for the shadow caster so its skin doesn't Z-fight with the plane.
+            let shadow_lift = 0.05;
+            if let Ok(mut t) = transforms.get_mut(scene_ready.entity) {
+                t.translation.y += offset + shadow_lift;
+                info!("Peter Pan shadow root translation after offset+lift: {}", t.translation.y);
+            } else {
+                commands.entity(scene_ready.entity).insert(Transform::from_translation(Vec3::new(0.0, offset + shadow_lift, 0.0)));
+            }
+            info!("Peter Pan shadow: applied offset {} + lift {}", offset, shadow_lift);
+        }
+    }
 }
 
 // Animate Peter Pan and his shadow independently
 fn move_peter_pan(
     time: Res<Time>,
-    mut body_query: Query<&mut Transform, (With<PeterPanBody>, Without<PeterPanShadow>)>,
     mut shadow_query: Query<&mut Transform, (With<PeterPanShadow>, Without<PeterPanBody>)>,
 ) {
     let t = time.elapsed_secs();
@@ -190,10 +272,86 @@ fn move_peter_pan(
         shadow_transform.translation.x = shadow_t.sin() * 2.0;
         shadow_transform.translation.z = shadow_t.cos() * 2.0;
 
-        // Shadow stays grounded while body flies
-        shadow_transform.translation.y = 0.3; // Slightly above floor to avoid z-fighting if it were visible, but it's invisible so it doesn't matter much, but good for shadow casting origin.
+        // Shadow stays grounded while body flies: do not override the initial Y value
 
         // Rotate the shadow independently?
         shadow_transform.rotation = Quat::from_rotation_y(t * 2.0);
+    }
+}
+
+// Resource used to store the computed Y offset when the visible body is grounded
+#[derive(Resource)]
+struct PeterPanGrounding {
+    offset_y: Option<f32>,
+}
+
+#[derive(Resource, Default)]
+struct PeterPanEntities {
+    body: Option<Entity>,
+    shadow: Option<Entity>,
+    gltf_handle: Handle<Gltf>,
+}
+
+#[derive(Resource, Default)]
+struct AnimationOverrideState {
+    applied: bool,
+}
+
+fn try_apply_named_animations(
+    mut commands: Commands,
+    gltfs: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    entities: Res<PeterPanEntities>,
+    mut override_state: ResMut<AnimationOverrideState>,
+    children: Query<&Children>,
+    mut players: Query<&mut AnimationPlayer>,
+) {
+    if override_state.applied {
+        return;
+    }
+    let gltf_handle = &entities.gltf_handle;
+    if let Some(gltf) = gltfs.get(gltf_handle) {
+        // Try to find named animations "survey" / "Survey"
+        if let Some(body_entity) = entities.body {
+            if let Some(anim_handle) = gltf
+                .named_animations
+                .get("Survey")
+                .or_else(|| gltf.named_animations.get("survey"))
+            {
+                let anim_clip: Handle<AnimationClip> = anim_handle.clone();
+                let (graph, idx) = AnimationGraph::from_clip(anim_clip);
+                let graph_handle = graphs.add(graph);
+                commands.entity(body_entity).insert(AnimationToPlay { graph_handle: graph_handle.clone(), index: idx });
+                // Start the anim on any existing players in case the scene already spawned
+                for child in children.iter_descendants(body_entity) {
+                    if let Ok(mut player) = players.get_mut(child) {
+                        player.play(idx).repeat();
+                        commands.entity(child).insert(AnimationGraphHandle(graph_handle.clone()));
+                    }
+                }
+                info!("Applied named 'Survey' animation to body. index: {:?}", idx);
+            }
+        }
+        // Run for shadow
+        if let Some(shadow_entity) = entities.shadow {
+            if let Some(anim_handle) = gltf
+                .named_animations
+                .get("Run")
+                .or_else(|| gltf.named_animations.get("run"))
+            {
+                let anim_clip: Handle<AnimationClip> = anim_handle.clone();
+                let (graph, idx) = AnimationGraph::from_clip(anim_clip);
+                let graph_handle = graphs.add(graph);
+                commands.entity(shadow_entity).insert(AnimationToPlay { graph_handle: graph_handle.clone(), index: idx });
+                for child in children.iter_descendants(shadow_entity) {
+                    if let Ok(mut player) = players.get_mut(child) {
+                        player.play(idx).repeat();
+                        commands.entity(child).insert(AnimationGraphHandle(graph_handle.clone()));
+                    }
+                }
+                info!("Applied named 'Run' animation to shadow. index: {:?}", idx);
+            }
+        }
+        override_state.applied = true;
     }
 }
