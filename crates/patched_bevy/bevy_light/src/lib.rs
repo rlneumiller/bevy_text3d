@@ -205,13 +205,11 @@ impl Plugin for LightPlugin {
 /// With<DirectionalLight>)>`, for use with [`bevy_camera::visibility::VisibleEntities`].
 pub type WithLight = Or<(With<PointLight>, With<SpotLight>, With<DirectionalLight>)>;
 
-// NotShadowCaster
 /// Add this component to make a [`Mesh3d`] not cast shadows.
 #[derive(Debug, Component, Reflect, Default, Clone, PartialEq)]
 #[reflect(Component, Default, Debug, Clone, PartialEq)]
 pub struct NotShadowCaster;
 
-// NotShadowReceiver
 /// Add this component to make a [`Mesh3d`] not receive shadows.
 ///
 /// **Note:** If you're using diffuse transmission, setting [`NotShadowReceiver`] will
@@ -220,8 +218,6 @@ pub struct NotShadowCaster;
 #[derive(Debug, Component, Reflect, Default)]
 #[reflect(Component, Default, Debug)]
 pub struct NotShadowReceiver;
-
-// OnlyShadowCaster
 /// Add this component to make a [`Mesh3d`] only cast shadows, without being visible to cameras.
 ///
 /// Entities with this component will be included in shadow map rendering for lights, even if they
@@ -229,8 +225,6 @@ pub struct NotShadowReceiver;
 #[derive(Debug, Component, Reflect, Default)]
 #[reflect(Component, Default, Debug)]
 pub struct OnlyShadowCaster;
-
-// TransmittedShadowReceiver
 /// Add this component to make a [`Mesh3d`] using a PBR material with `StandardMaterial::diffuse_transmission > 0.0`
 /// receive shadows on its diffuse transmission lobe. (i.e. its “backside”)
 ///
@@ -242,7 +236,6 @@ pub struct OnlyShadowCaster;
 #[reflect(Component, Default, Debug)]
 pub struct TransmittedShadowReceiver;
 
-// ShadowFilteringMethod
 /// Add this component to a [`Camera3d`](bevy_camera::Camera3d)
 /// to control how to anti-alias shadow edges.
 ///
