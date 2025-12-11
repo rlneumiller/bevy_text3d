@@ -1,3 +1,4 @@
+// file: examples/simple_text_shadows.rs
 use bevy::light::{DirectionalLightShadowMap, NotShadowCaster, OnlyShadowCaster};
 use bevy::prelude::*;
 use bevy_camera::visibility::RenderLayers;
@@ -9,6 +10,10 @@ use bevy_text3d::{
 // Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
 const DEFAULT_RENDER_LAYER: usize = 0;
 const SHADOW_ONLY_LAYER: usize = 1;
+
+// This example demonstrates the use of RenderLayers with shadows.
+// It showcases how to set up a camera and directional light with text shadow casting.
+// The entities are organized into different render layers for visibility control.
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 enum AppState {
@@ -42,9 +47,8 @@ fn main() {
         .add_systems(
             Update,
             sync_shadow_casters.run_if(in_state(AppState::Ready)),
-        );
-
-    app.run();
+        )
+        .run();
 }
 
 fn setup(
@@ -57,24 +61,22 @@ fn setup(
     let font_handle = asset_server.load("fonts/FiraCode-Bold.ttf");
     commands.insert_resource(FontHandle(font_handle));
 
-    // Camera
     let camera = commands
         .spawn((
             Camera3d::default(),
             Transform::from_xyz(0.0, 2.5, 6.0).looking_at(Vec3::new(0.0, 0.8, 0.0), Vec3::Y),
         ))
         .id();
-    // Allow the camera to optionally see both the default and shadow-only layer for debugging.
     commands.entity(camera).insert(RenderLayers::from_layers(&[
         DEFAULT_RENDER_LAYER,
         SHADOW_ONLY_LAYER,
     ]));
 
     // Directional light with shadows and configured to affect both layer 0 (camera) and layer 1 (shadow-only)
-    let dir_light_entity = commands
+    let dir_light = commands
         .spawn((
             DirectionalLight {
-                illuminance: 10000.0,
+                illuminance: 10_000.0,
                 shadows_enabled: true,
                 ..default()
             },
@@ -83,7 +85,7 @@ fn setup(
         .id();
     // Allow this directional light to participate in layers 0 (default camera) and 1 (shadow-only)
     commands
-        .entity(dir_light_entity)
+        .entity(dir_light)
         .insert(RenderLayers::from_layers(&[
             DEFAULT_RENDER_LAYER,
             SHADOW_ONLY_LAYER,
