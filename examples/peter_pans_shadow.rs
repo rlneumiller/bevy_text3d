@@ -1,6 +1,8 @@
 // file: examples/peter_pans_shadow.rs
 use bevy::light::{DirectionalLightShadowMap, NotShadowCaster, OnlyShadowCaster};
 use bevy::prelude::*;
+use bevy::gltf::GltfAssetLabel;
+use bevy::scene::{SceneRoot, SceneInstanceReady};
 use bevy_camera::visibility::RenderLayers;
 
 // Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
@@ -18,6 +20,7 @@ fn main() {
         .insert_resource(DirectionalLightShadowMap { size: 4096 })
         .add_systems(Startup, setup)
         .add_systems(Update, move_peter_pan)
+        
         .run();
 }
 
@@ -27,10 +30,18 @@ struct PeterPanBody;
 #[derive(Component)]
 struct PeterPanShadow;
 
+#[derive(Component, Clone)]
+struct AnimationToPlay {
+    graph_handle: Handle<AnimationGraph>,
+    index: AnimationNodeIndex,
+}
+
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
     let camera = commands
         .spawn((
@@ -73,33 +84,42 @@ fn setup(
     ));
 
     // "Peter Pan"
-    // We use a capsule to represent a humanoid shape
-    let peter_pan_mesh = meshes.add(Capsule3d::new(0.3, 1.0));
-    let peter_pan_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.2, 0.8, 0.2), // Green for Peter Pan
-        ..default()
-    });
+    // Load the animated GLB scene (scene 0) and the first animation (if present)
+    // NOTE: asset paths are relative to the `assets/` directory
+    // Use GltfAssetLabel helpers to target sub-assets (Scene 0 and Animation 0)
+    // Use the Fox model included in bevy_0.17 known-good example assets
+    let gltf_path: &str = "models/animated/Fox.glb";
+    let glb_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset(gltf_path));
+    let glb_animation = asset_server.load(GltfAssetLabel::Animation(0).from_asset(gltf_path));
+    let glb_scene_scale = 0.025;
 
     // 1. The Visible Body (No Shadow)
+    // Create AnimationGraph from the animation clip and store the graph handle
+    let (graph, index): (AnimationGraph, AnimationNodeIndex) =
+        AnimationGraph::from_clip(glb_animation.clone());
+    let graph_handle = graphs.add(graph);
+
+    let animation_component = AnimationToPlay { graph_handle: graph_handle.clone(), index };
+
     commands.spawn((
-        Mesh3d(peter_pan_mesh.clone()),
-        MeshMaterial3d(peter_pan_material.clone()),
-        Transform::from_xyz(0.0, 1.0, 0.0),
+        SceneRoot(glb_scene.clone()),
+        Transform::from_xyz(0.0, 1.0, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
         PeterPanBody,
-        NotShadowCaster, // Don't cast a normal shadow
+        // NotShadowCaster will be applied to descendant mesh entities in a SceneInstanceReady handler
         RenderLayers::layer(DEFAULT_RENDER_LAYER),
-    ));
+    )).observe(play_peter_pan_when_ready);
 
     // 2. The Independent Shadow (Invisible, Shadow Only)
     commands.spawn((
-        Mesh3d(peter_pan_mesh),
-        MeshMaterial3d(peter_pan_material), // Material doesn't matter much for shadow caster, but keeping it same is fine
-        Transform::from_xyz(0.0, 1.0, 0.0),
+        SceneRoot(glb_scene.clone()),
+        Transform::from_xyz(0.0, 1.0, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
         PeterPanShadow,
-        OnlyShadowCaster,
-        Visibility::Hidden,
+        // We'll apply OnlyShadowCaster + Hidden to descendants when the scene is ready
         RenderLayers::layer(SHADOW_ONLY_LAYER),
-    ));
+        animation_component,
+    )).observe(play_peter_pan_when_ready);
+
+    // Nothing else needed here; the AnimationToPlay component will be used when the scene instance is ready
 
     // A visible reference object to show that normal objects work as expected
     commands.spawn((
@@ -113,6 +133,46 @@ fn setup(
     ));
 }
 
+/// Triggered when a scene instance is spawned; this will find AnimationPlayer
+/// components in the scene and start the requested animation, and also apply
+/// shadow-related components (NotShadowCaster / OnlyShadowCaster) to mesh
+/// children depending on whether the root is a `PeterPanBody` or `PeterPanShadow`.
+fn play_peter_pan_when_ready(
+    scene_ready: On<SceneInstanceReady>,
+    mut commands: Commands,
+    animation_query: Query<&AnimationToPlay>,
+    children: Query<&Children>,
+    mut players: Query<&mut AnimationPlayer>,
+    body_query: Query<&PeterPanBody>,
+    shadow_query: Query<&PeterPanShadow>,
+    ) {
+    // Optionally get the AnimationToPlay; it's not required for apply the shadow components
+    let anim = animation_query.get(scene_ready.entity).ok();
+    for child in children.iter_descendants(scene_ready.entity) {
+        // Start animations on any AnimationPlayer only if AnimationToPlay exists
+        if let Some(animation_to_play) = anim {
+            if let Ok(mut player) = players.get_mut(child) {
+                player.play(animation_to_play.index).repeat();
+                // Connect the animation graph to the player
+                commands
+                    .entity(child)
+                    .insert(AnimationGraphHandle(animation_to_play.graph_handle.clone()));
+            }
+        }
+
+        // Apply shadow components to mesh nodes by checking descendant entities independent of animation
+        if body_query.get(scene_ready.entity).is_ok() {
+            // Apply NotShadowCaster to all descendants so the visible mesh doesn't cast a shadow.
+            // We can insert the component on every descendant; it only affects renderables.
+            commands.entity(child).insert(NotShadowCaster);
+        }
+        if shadow_query.get(scene_ready.entity).is_ok() {
+            // For shadow root, ensure children are only shadow-casters and hidden from camera
+            commands.entity(child).insert((OnlyShadowCaster, Visibility::Hidden, RenderLayers::layer(SHADOW_ONLY_LAYER)));
+        }
+    }
+}
+
 // Animate Peter Pan and his shadow independently
 fn move_peter_pan(
     time: Res<Time>,
@@ -121,12 +181,7 @@ fn move_peter_pan(
 ) {
     let t = time.elapsed_secs();
 
-    // Move Body: Bob up and down, move in a circle
-    if let Some(mut body_transform) = body_query.iter_mut().next() {
-        body_transform.translation.x = t.sin() * 2.0;
-        body_transform.translation.z = t.cos() * 2.0;
-        body_transform.translation.y = 1.0 + (t * 3.0).sin() * 0.5;
-    }
+    // Body stays stationary -- we intentionally do not move the visible Peter Pan body
 
     // Move Shadow: Follows x/z but stays on the ground (or lags behind)
     if let Some(mut shadow_transform) = shadow_query.iter_mut().next() {
