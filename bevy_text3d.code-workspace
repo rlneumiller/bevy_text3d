@@ -29,11 +29,10 @@
       "target/",
       "node_modules/",
       "build/",
-      "/home/arrel/temp",
       "/home/arrel/gits",
-      "/mnt/gits/gits",
-      "/home/arrel"
+      "/mnt/gits/gits"
     ],
+    "terminal.integrated.defaultProfile.windows": "VS BuildTools Dev PowerShell",
     "terminal.integrated.env.linux": {
       "RUSTC_WRAPPER": "sccache",
       "WINIT_UNIX_BACKEND": "wayland"
@@ -106,6 +105,72 @@
             "run",
             "--example",
             "from_rect",
+            "--target-dir",
+            "${workspaceFolder:bevy_text3d}/target",
+            "--manifest-path",
+            "${workspaceFolder:bevy_text3d}/Cargo.toml"
+          ],
+          "cwd": "${workspaceFolder:bevy_text3d}"
+        },
+        "args": []
+      },
+      {
+        "name": "peter_pans_shadow (Example)",
+        "type": "lldb",
+        "request": "launch",
+        "cwd": "${workspaceFolder:bevy_text3d}",
+        "env": {
+          "BEVY_ASSET_ROOT": "${workspaceFolder:bevy_text3d}"
+        },
+        "cargo": {
+          "args": [
+            "run",
+            "--example",
+            "peter_pans_shadow",
+            "--target-dir",
+            "${workspaceFolder:bevy_text3d}/target",
+            "--manifest-path",
+            "${workspaceFolder:bevy_text3d}/Cargo.toml"
+          ],
+          "cwd": "${workspaceFolder:bevy_text3d}"
+        },
+        "args": []
+      },
+      {
+        "name": "render_layers_shadows (Example)",
+        "type": "lldb",
+        "request": "launch",
+        "cwd": "${workspaceFolder:bevy_text3d}",
+        "env": {
+          "BEVY_ASSET_ROOT": "${workspaceFolder:bevy_text3d}"
+        },
+        "cargo": {
+          "args": [
+            "run",
+            "--example",
+            "render_layers_shadows",
+            "--target-dir",
+            "${workspaceFolder:bevy_text3d}/target",
+            "--manifest-path",
+            "${workspaceFolder:bevy_text3d}/Cargo.toml"
+          ],
+          "cwd": "${workspaceFolder:bevy_text3d}"
+        },
+        "args": []
+      },
+      {
+        "name": "render_layers_text_shadows (Example)",
+        "type": "lldb",
+        "request": "launch",
+        "cwd": "${workspaceFolder:bevy_text3d}",
+        "env": {
+          "BEVY_ASSET_ROOT": "${workspaceFolder:bevy_text3d}"
+        },
+        "cargo": {
+          "args": [
+            "run",
+            "--example",
+            "render_layers_text_shadows",
             "--target-dir",
             "${workspaceFolder:bevy_text3d}/target",
             "--manifest-path",
