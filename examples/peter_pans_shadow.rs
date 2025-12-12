@@ -15,6 +15,9 @@ use bevy_text3d::grounding::compute_ground_offset;
 const MAIN_CAMERA_LAYER: usize = 0;
 const SHADOW_ONLY_LAYER: usize = 1;
 
+// Initial Y position for Peter Pan entities
+const PETER_PAN_INITIAL_Y: f32 = 0.12174225;
+
 // This example demonstrates "Peter Pan's Shadow" effect.
 // It shows how to have a visible entity whose shadow is independent of the visible entity.
 // We achieve this by having two entities:
@@ -121,7 +124,8 @@ fn setup(
     let body_entity = commands
         .spawn((
             SceneRoot(glb_scene.clone()),
-            Transform::from_xyz(0.0, 0.1217422, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
+            Transform::from_xyz(0.0, PETER_PAN_INITIAL_Y, 0.0)
+                .with_scale(Vec3::splat(glb_scene_scale)),
             PeterPanBody,
             survey_animation,
             // NotShadowCaster will be applied to descendant mesh entities in a SceneInstanceReady handler
@@ -143,7 +147,8 @@ fn setup(
     let shadow_entity = commands
         .spawn((
             SceneRoot(glb_scene.clone()),
-            Transform::from_xyz(0.0, 0.1217422, 0.0).with_scale(Vec3::splat(glb_scene_scale)),
+            Transform::from_xyz(0.0, PETER_PAN_INITIAL_Y, 0.0)
+                .with_scale(Vec3::splat(glb_scene_scale)),
             PeterPanShadow,
             // We'll apply OnlyShadowCaster + Hidden to descendants when the scene is ready
             RenderLayers::layer(SHADOW_ONLY_LAYER),
@@ -199,7 +204,7 @@ fn play_peter_pan_when_ready(
         {
             // Ground plane is at y = 0.0. We'll lower the body so the minimum point sits on the ground
             if let Ok(mut t) = transforms.get_mut(scene_ready.entity) {
-                t.translation.y += offset;
+                t.translation.y += offset - (PETER_PAN_INITIAL_Y * 2.0);
                 info!(
                     "Peter Pan body root translation after offset: {}",
                     t.translation.y
@@ -208,7 +213,11 @@ fn play_peter_pan_when_ready(
                 // Fallback in case the transform was not present for some reason
                 commands
                     .entity(scene_ready.entity)
-                    .insert(Transform::from_translation(Vec3::new(0.0, offset, 0.0)));
+                    .insert(Transform::from_translation(Vec3::new(
+                        0.0,
+                        offset - (PETER_PAN_INITIAL_Y * 2.0),
+                        0.0,
+                    )));
             }
             info!("Peter Pan body min_y: {} offset: {}", min_world_y, offset);
             grounding.offset_y = Some(offset);
@@ -290,13 +299,12 @@ fn move_peter_pan(
     if let Some(mut shadow_transform) = shadow_query.iter_mut().next() {
         // Shadow tries to run away! (Offset phase)
         let shadow_t = t - 0.5;
-        shadow_transform.translation.x = shadow_t.sin() * 2.0;
+        shadow_transform.translation.x = -shadow_t.sin() * 2.0;
         shadow_transform.translation.z = shadow_t.cos() * 2.0;
 
         // Shadow stays grounded while body flies: do not override the initial Y value
 
-        // Rotate the shadow independently?
-        shadow_transform.rotation = Quat::from_rotation_y(t * 2.0);
+        // Don't rotate the shadow around its local Y; keep it facing as in the GLTF animation
     }
 }
 
