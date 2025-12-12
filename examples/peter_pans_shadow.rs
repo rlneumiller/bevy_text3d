@@ -30,6 +30,7 @@ fn main() {
         .add_systems(Startup, setup)
         .add_systems(Update, move_peter_pan)
         .add_systems(Update, try_apply_named_animations)
+        .add_systems(Update, toggle_shadows_on_key_s)
         .run();
 }
 
@@ -296,6 +297,57 @@ fn move_peter_pan(
 
         // Rotate the shadow independently?
         shadow_transform.rotation = Quat::from_rotation_y(t * 2.0);
+    }
+}
+
+// Toggle shadows between visible fox and invisible fox on KeyS press
+fn toggle_shadows_on_key_s(
+    mut keyboard_input: ResMut<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    body_entities: Query<Entity, With<PeterPanBody>>,
+    shadow_entities: Query<Entity, With<PeterPanShadow>>,
+    children: Query<&Children>,
+    mut state: Local<bool>,
+) {
+    if keyboard_input.just_pressed(KeyCode::KeyS) {
+        keyboard_input.clear_just_pressed(KeyCode::KeyS);
+        *state = !*state;
+
+        if *state {
+            // Swap: Visible fox shadow disabled, invisible fox shadow enabled
+            // Add OnlyShadowCaster to body's descendants, remove NotShadowCaster
+            for body_entity in &body_entities {
+                for child_entity in children.iter_descendants(body_entity) {
+                    commands.entity(child_entity).remove::<NotShadowCaster>();
+                    commands.entity(child_entity).insert(OnlyShadowCaster);
+                }
+            }
+
+            // Add NotShadowCaster to shadow's descendants, remove OnlyShadowCaster
+            for shadow_entity in &shadow_entities {
+                for child_entity in children.iter_descendants(shadow_entity) {
+                    commands.entity(child_entity).insert(NotShadowCaster);
+                    commands.entity(child_entity).remove::<OnlyShadowCaster>();
+                }
+            }
+        } else {
+            // Restore: Visible fox shadow enabled, invisible fox shadow disabled
+            // Add NotShadowCaster to body's descendants, remove OnlyShadowCaster
+            for body_entity in &body_entities {
+                for child_entity in children.iter_descendants(body_entity) {
+                    commands.entity(child_entity).insert(NotShadowCaster);
+                    commands.entity(child_entity).remove::<OnlyShadowCaster>();
+                }
+            }
+
+            // Add OnlyShadowCaster to shadow's descendants, remove NotShadowCaster
+            for shadow_entity in &shadow_entities {
+                for child_entity in children.iter_descendants(shadow_entity) {
+                    commands.entity(child_entity).remove::<NotShadowCaster>();
+                    commands.entity(child_entity).insert(OnlyShadowCaster);
+                }
+            }
+        }
     }
 }
 
