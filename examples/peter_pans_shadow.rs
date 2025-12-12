@@ -234,14 +234,14 @@ fn play_peter_pan_when_ready(
 
         // Apply shadow components to mesh nodes by checking descendant entities independent of animation
         if body_query.get(scene_ready.entity).is_ok() {
-            // Apply NotShadowCaster to all descendants so the visible mesh doesn't cast a shadow.
+            // Apply OnlyShadowCaster to all descendants so the visible mesh only casts a shadow.
             // We can insert the component on every descendant; it only affects renderables.
-            commands.entity(child).insert(NotShadowCaster);
+            commands.entity(child).insert(OnlyShadowCaster);
         }
         if shadow_query.get(scene_ready.entity).is_ok() {
-            // For shadow root, ensure children are only shadow-casters and hidden from camera
+            // For shadow root, ensure children don't cast shadows and are hidden from camera
             commands.entity(child).insert((
-                OnlyShadowCaster,
+                NotShadowCaster,
                 Visibility::Hidden,
                 RenderLayers::layer(SHADOW_ONLY_LAYER),
             ));
@@ -314,37 +314,37 @@ fn toggle_shadows_on_key_s(
         *state = !*state;
 
         if *state {
-            // Swap: Visible fox shadow disabled, invisible fox shadow enabled
-            // Add OnlyShadowCaster to body's descendants, remove NotShadowCaster
-            for body_entity in &body_entities {
-                for child_entity in children.iter_descendants(body_entity) {
-                    commands.entity(child_entity).remove::<NotShadowCaster>();
-                    commands.entity(child_entity).insert(OnlyShadowCaster);
-                }
-            }
-
-            // Add NotShadowCaster to shadow's descendants, remove OnlyShadowCaster
-            for shadow_entity in &shadow_entities {
-                for child_entity in children.iter_descendants(shadow_entity) {
-                    commands.entity(child_entity).insert(NotShadowCaster);
-                    commands.entity(child_entity).remove::<OnlyShadowCaster>();
-                }
-            }
-        } else {
-            // Restore: Visible fox shadow enabled, invisible fox shadow disabled
+            // Swap: Visible fox shadow enabled, invisible fox shadow disabled
             // Add NotShadowCaster to body's descendants, remove OnlyShadowCaster
             for body_entity in &body_entities {
                 for child_entity in children.iter_descendants(body_entity) {
-                    commands.entity(child_entity).insert(NotShadowCaster);
                     commands.entity(child_entity).remove::<OnlyShadowCaster>();
+                    commands.entity(child_entity).insert(NotShadowCaster);
                 }
             }
 
             // Add OnlyShadowCaster to shadow's descendants, remove NotShadowCaster
             for shadow_entity in &shadow_entities {
                 for child_entity in children.iter_descendants(shadow_entity) {
-                    commands.entity(child_entity).remove::<NotShadowCaster>();
                     commands.entity(child_entity).insert(OnlyShadowCaster);
+                    commands.entity(child_entity).remove::<NotShadowCaster>();
+                }
+            }
+        } else {
+            // Restore: Visible fox shadow disabled, invisible fox shadow enabled
+            // Add OnlyShadowCaster to body's descendants, remove NotShadowCaster
+            for body_entity in &body_entities {
+                for child_entity in children.iter_descendants(body_entity) {
+                    commands.entity(child_entity).insert(OnlyShadowCaster);
+                    commands.entity(child_entity).remove::<NotShadowCaster>();
+                }
+            }
+
+            // Add NotShadowCaster to shadow's descendants, remove OnlyShadowCaster
+            for shadow_entity in &shadow_entities {
+                for child_entity in children.iter_descendants(shadow_entity) {
+                    commands.entity(child_entity).remove::<OnlyShadowCaster>();
+                    commands.entity(child_entity).insert(NotShadowCaster);
                 }
             }
         }
