@@ -67,6 +67,25 @@ fn setup(
         SHADOW_ONLY_LAYER,
     ]));
 
+    // UI: small hint for the "S" key in the top-left corner
+    // Spawn a 2D camera for UI
+    commands.spawn(Camera2d);
+    let font_handle: Handle<Font> = asset_server.load("fonts/FiraCode-Bold.ttf");
+    commands.spawn((
+        Text::new("Press S to toggle shadows"),
+        TextFont {
+            font: font_handle.clone(),
+            font_size: 20.0,
+            ..Default::default()
+        },
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(8.0),
+            top: Val::Px(8.0),
+            ..Default::default()
+        },
+    ));
+
     let dir_light = commands
         .spawn((
             DirectionalLight {
