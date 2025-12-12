@@ -29,6 +29,7 @@ avian3d = "0.4"
 default = []
 
 [patch.crates-io]
+#We specifically patch: "bevy_pbr/src/render/mesh.rs" and "bevy_light/src/lib.rs"
 bevy_pbr = { path = "crates/patched_bevy/bevy_pbr" }
 bevy_light = { path = "crates/patched_bevy/bevy_light" }
 
