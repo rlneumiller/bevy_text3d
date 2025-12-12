@@ -28,9 +28,7 @@
     "rust-analyzer.files.exclude": [
       "target/",
       "node_modules/",
-      "build/",
-      "/home/arrel/gits",
-      "/mnt/gits/gits"
+      "build/"
     ],
     "terminal.integrated.defaultProfile.windows": "VS BuildTools Dev PowerShell",
     "terminal.integrated.env.linux": {
