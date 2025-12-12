@@ -4,50 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.17.3", default-features = false, features = [
-  "std",
-  "async_executor",
-  "android-game-activity",
-  "android_shared_stdcxx",
-  "animation",
-  "bevy_asset",
-  "bevy_audio",
-  "bevy_color",
-  "bevy_core_pipeline",
-  "bevy_gilrs",
-  "bevy_gizmos",
-  "bevy_gltf",
-  "bevy_input_focus",
-  "bevy_log",
-  "bevy_light",
-  "bevy_mesh_picking_backend",
-  "bevy_pbr",
-  "bevy_picking",
-  "bevy_render",
-  "bevy_scene",
-  "bevy_sprite",
-  "bevy_sprite_picking_backend",
-  "bevy_state",
-  "bevy_text",
-  "bevy_ui",
-  "bevy_ui_picking_backend",
-  "bevy_window",
-  "bevy_winit",
-  "custom_cursor",
-  "default_font",
-  "hdr",
-  "multi_threaded",
-  "png",
-  "smaa_luts",
-  "sysinfo_plugin",
-  "tonemapping_luts",
-  "vorbis",
-  "webgl2",
-  #"x11", 
-#bevy default features above (I've disabled "x11" since I want to target wayland only)
-  "wayland",
-  "zstd_rust",
-] }
+bevy = "0.17.3"
 
 bevy_mesh = "0.17.3"
 fdsm = "0.7.0"
@@ -91,3 +48,12 @@ name = "sdf_text_shadows"
 
 [[example]]
 name = "simple_text_shadows"
+
+[[example]]
+name = "peter_pans_shadow"
+
+[[example]]
+name = "render_layers_shadows"
+
+[[example]]
+name = "render_layers_text_shadows"
