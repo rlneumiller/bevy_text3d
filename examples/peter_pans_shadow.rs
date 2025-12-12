@@ -68,9 +68,16 @@ fn setup(
         SHADOW_ONLY_LAYER,
     ]));
 
-    // UI: small hint for the "S" key in the top-left corner
-    // Spawn a 2D camera for UI
-    commands.spawn(Camera2d);
+    // Our UI: A text label for the "S" key in the top-left corner
+    // Set the render layer of the 2D camera for UI to a higher layer so that it renders after the 3D camera. This ensures
+    // the UI renders on top of the 3D rendered scene.
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 1,
+            ..Default::default()
+        },
+    ));
     let font_handle: Handle<Font> = asset_server.load("fonts/FiraCode-Bold.ttf");
     commands.spawn((
         Text::new("Press S to toggle shadows"),
@@ -122,8 +129,10 @@ fn setup(
     // Use the Fox model included in bevy_0.17 known-good example assets
     let gltf_path: &str = "models/animated/Fox.glb";
     let glb_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset(gltf_path));
+
     // Also load the main Gltf to discover named animations if present
     let gltf_asset = asset_server.load(gltf_path);
+
     // We'll load both the survey and run animations by index. If your model
     // provides named animations, replace these indices with the correct ones
     // or use the `Gltf` asset and discover names at runtime.
@@ -411,6 +420,14 @@ fn try_apply_named_animations(
     }
     let gltf_handle = &entities.gltf_handle;
     if let Some(gltf) = gltfs.get(gltf_handle) {
+        // Log any named animations discovered in the GLTF
+        if gltf.named_animations.is_empty() {
+            info!("No named animations found in GLTF");
+        } else {
+            let names: Vec<&str> = gltf.named_animations.keys().map(|k| k.as_ref()).collect();
+            info!("Discovered named animations: {:?}", names);
+        }
+
         // Try to find named animations "survey" / "Survey"
         if let Some(body_entity) = entities.body {
             if let Some(anim_handle) = gltf
