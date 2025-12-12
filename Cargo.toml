@@ -23,6 +23,7 @@ bevy_text = "0.17.3"
 # open_space_controller dependency removed for standalone repo
 bevy_asset_loader = "0.24.0-rc.1"
 bevy_camera = "0.17.3"
+avian3d = "0.4"
 
 [features]
 default = []

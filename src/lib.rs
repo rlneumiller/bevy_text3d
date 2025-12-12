@@ -1,5 +1,6 @@
 pub mod dump_glyph_profile;
 pub mod font;
+pub mod grounding;
 mod pipeline;
 mod pipeline_material;
 pub mod shadow_casting;
