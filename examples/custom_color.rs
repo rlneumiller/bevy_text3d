@@ -39,7 +39,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let take_screenshot = std::env::args().any(|arg| arg == "--take-screenshot");
 
     // Add a camera positioned to look at the origin
-    let mut camera = commands.spawn((
+    commands.spawn((
         Camera3d::default(),
         Transform::from_xyz(0.0, 0.0, 2.5).looking_at(Vec3::ZERO, Vec3::Y),
     ));
