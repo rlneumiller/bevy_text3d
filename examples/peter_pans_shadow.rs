@@ -15,14 +15,15 @@ use bevy_text3d::grounding::compute_ground_offset;
 const MAIN_CAMERA_LAYER: usize = 0;
 const SHADOW_ONLY_LAYER: usize = 1;
 
-// Initial Y position for Peter Pan entities
+// For calculating feet initial Y position of the `Peter Pan` surrogate fox model
 const PETER_PAN_INITIAL_Y: f32 = 0.12174225;
 
-// This example demonstrates "Peter Pan's Shadow" effect.
-// It shows how to have a visible entity whose shadow is independent of the visible entity.
-// We achieve this by having two entities:
-// 1. A visible entity that does not cast shadows (NotShadowCaster).
-// 2. An invisible entity that only casts shadows (OnlyShadowCaster).
+/// This example demonstrates "Peter Pan's Shadow" effect enabled by implementating
+/// OnlyShadowCaster component in bevy_light/bevy_pbr.
+/// It shows how to have a visible entity whose shadow is independent of the visible entity.
+/// We achieve this by having two entities:
+/// 1. A visible entity that does not cast shadows (NotShadowCaster).
+/// 2. An invisible entity that only casts shadows (OnlyShadowCaster).
 fn main() {
     let mut app = App::new();
     app.add_plugins((DefaultPlugins, PhysicsPlugins::default()))
