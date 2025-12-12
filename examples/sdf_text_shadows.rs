@@ -11,7 +11,8 @@ use bevy_text3d::{
 use bevy_light::light_consts::lux;
 
 // Layer indices used in examples to separate main camera layer (0) from shadow-only layer (1).
-const DEFAULT_RENDER_LAYER: usize = 0;
+#[allow(dead_code)]
+const MAIN_CAMERA_LAYER: usize = 0;
 const SHADOW_ONLY_LAYER: usize = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -411,17 +412,17 @@ fn sync_shadow_casters(
 
 /// Debug system used to log positions and AABB information for shadow-only meshes and the floor.
 fn debug_log_shadow_casters(
-    query_shadow_casters: Query<(&Mesh3d, &GlobalTransform, &RenderLayers), With<OnlyShadowCaster>>,
-    floor_query: Query<(&Mesh3d, &GlobalTransform), Without<MeshMaterial3d<ShadowOnlyMaterial>>>,
+    query_shadow_casters: Query<(&GlobalTransform, &RenderLayers), With<OnlyShadowCaster>>,
+    floor_query: Query<&GlobalTransform, Without<MeshMaterial3d<ShadowOnlyMaterial>>>,
 ) {
-    for (mesh, transform, layers) in query_shadow_casters.iter() {
+    for (transform, layers) in query_shadow_casters.iter() {
         debug!(
             "shadow-caster entity on layers {:?} world pos = {:?}",
             layers,
             transform.translation()
         );
     }
-    for (mesh, transform) in floor_query.iter() {
+    for transform in floor_query.iter() {
         debug!("floor world pos = {:?}", transform.translation());
     }
 }
